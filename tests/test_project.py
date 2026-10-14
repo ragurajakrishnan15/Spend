@@ -192,6 +192,20 @@ def test_sql_row_cap(db):
     assert len(out) == 25 and out.attrs["truncated"] is True
 
 
+def test_sql_timeout_interrupts_runaway_query(db):
+    from src.sql_safety import UnsafeQueryError
+    path, _ = db
+    with pytest.raises(UnsafeQueryError, match="time limit"):
+        run_sql("SELECT count(*) FROM range(100000) a, range(100000) b, range(100000) c "
+                "WHERE a.range + b.range > c.range * 3", str(path), timeout=1)
+
+
+def test_sql_memory_limit_rejects_huge_result(db):
+    path, _ = db
+    with pytest.raises(Exception, match="(?i)out of memory"):
+        run_sql("SELECT string_agg(repeat('x', 1000), ',') FROM range(2000000)", str(path))
+
+
 @pytest.mark.parametrize("q", [
     "DROP TABLE transactions",
     "DELETE FROM transactions",
