@@ -20,30 +20,53 @@ export default function BackendPrewarm() {
 
     useEffect(() => {
         let cancelled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const start = Date.now();
 
-        async function ping() {
+        // A cold Railway start can take ~30-60 s and returns 502/timeouts meanwhile,
+        // so keep retrying with exponential backoff (1 s, 2 s, 4 s ... capped at 8 s)
+        // and only report an error once the total wait budget is spent.
+        const MAX_WAIT_MS = 90_000;
+        const REQUEST_TIMEOUT_MS = 15_000;
+
+        async function ping(attempt: number) {
+            const controller = new AbortController();
+            const abort = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+            let ok = false;
             try {
                 const res = await fetch("/api/health", {
                     headers: { Accept: "application/json" },
+                    cache: "no-store",
+                    signal: controller.signal,
                 });
-                if (cancelled) return;
-                if (res.ok) {
-                    const elapsed = Date.now() - start;
-                    setStatus("ready");
-                    // Auto-hide the banner after 2 s so it doesn't linger on fast connections
-                    setTimeout(() => setDismissed(true), elapsed > 3000 ? 2000 : 0);
-                } else {
-                    setStatus("error");
-                }
+                ok = res.ok;
             } catch {
-                if (!cancelled) setStatus("error");
+                ok = false;
+            } finally {
+                clearTimeout(abort);
             }
+            if (cancelled) return;
+
+            if (ok) {
+                const elapsed = Date.now() - start;
+                setStatus("ready");
+                // Auto-hide the banner after 2 s so it doesn't linger on fast connections
+                setTimeout(() => setDismissed(true), elapsed > 3000 ? 2000 : 0);
+                return;
+            }
+
+            const delay = Math.min(1000 * 2 ** attempt, 8000);
+            if (Date.now() - start + delay > MAX_WAIT_MS) {
+                setStatus("error");
+                return;
+            }
+            timer = setTimeout(() => ping(attempt + 1), delay);
         }
 
-        ping();
+        ping(0);
         return () => {
             cancelled = true;
+            if (timer) clearTimeout(timer);
         };
     }, []);
 
