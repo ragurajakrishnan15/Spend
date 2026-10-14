@@ -4,6 +4,9 @@ SpendIQ is a portfolio project demonstrating transaction analytics, spending for
 customer segmentation, campaign-response modelling, SQL analytics, and lightweight model
 governance using **synthetic data only**.
 
+**Live demo:** <https://spendiq-rose.vercel.app> (Next.js on Vercel, FastAPI on Railway).
+The API can be slow on the first request after idle time.
+
 > This is an educational demonstration. It is an independent project, not affiliated with any
 > bank, does not use real customer data, and does not claim compliance with any regulation or
 > internal policy.
