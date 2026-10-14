@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+data/*.csv
+data/*.duckdb
+models/
+.streamlit/
+.DS_Store
+data/*.json
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+data/*.parquet

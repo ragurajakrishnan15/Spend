@@ -1,0 +1,14 @@
+# Backend (FastAPI) deploy config for Render (alternative to railway.toml). Deploy the repository root.
+services:
+  - type: web
+    name: spendiq-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GEMINI_API_KEY   # optional; template narratives are used when unset
+        sync: false

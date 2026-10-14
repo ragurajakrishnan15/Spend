@@ -1,0 +1,13 @@
+# Runtime dependencies for the FastAPI backend (what the deployed API needs). Dev extras: requirements-dev.txt
+pandas>=2.2
+numpy>=1.26
+duckdb>=1.1
+scikit-learn>=1.5
+xgboost>=2.0
+statsmodels>=0.14
+openpyxl>=3.1
+python-pptx>=0.6.23
+fastapi>=0.110
+uvicorn[standard]>=0.29
+# Optional: richer narrative summaries. Without it (or without GEMINI_API_KEY) template text is used.
+# google-generativeai>=0.8

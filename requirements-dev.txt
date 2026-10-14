@@ -1,0 +1,7 @@
+# Local development: API runtime + tests + legacy Streamlit demo.
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27
+# Streamlit demo (legacy UI)
+streamlit>=1.38
+plotly>=5.24

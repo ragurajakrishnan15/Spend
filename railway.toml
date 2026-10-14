@@ -1,0 +1,7 @@
+# Backend (FastAPI) deploy config for Railway. Deploy the repository root.
+# Railway auto-detects Python from requirements.txt (runtime deps only; dev extras are in requirements-dev.txt).
+[deploy]
+startCommand = "python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/api/health"
+# The first start generates the synthetic dataset before /api/health can answer.
+healthcheckTimeout = 300
