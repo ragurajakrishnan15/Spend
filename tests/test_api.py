@@ -70,3 +70,29 @@ def test_sql_endpoint(client):
 def test_governance(client):
     g = client.get("/api/governance").json()
     assert g["provenance"]["rows"] > 10000 and "compliance" in g["disclaimer"]
+
+
+def test_rate_limit_returns_429_with_retry_after(client, monkeypatch):
+    from backend import ratelimit
+    monkeypatch.setenv("SPENDIQ_RATE_LIMIT", "1")
+    ratelimit.reset()
+    q = {"query": "SELECT 1"}
+    codes = [client.post("/api/sql", json=q).status_code for _ in range(21)]
+    assert codes[:20] == [200] * 20
+    assert codes[20] == 429
+    blocked = client.post("/api/sql", json=q)
+    assert blocked.status_code == 429 and int(blocked.headers["Retry-After"]) >= 1
+    ratelimit.reset()
+
+
+def test_rate_limit_is_per_client_ip(client, monkeypatch):
+    from backend import ratelimit
+    monkeypatch.setenv("SPENDIQ_RATE_LIMIT", "1")
+    ratelimit.reset()
+    q = {"query": "SELECT 1"}
+    for _ in range(20):
+        client.post("/api/sql", json=q, headers={"X-Forwarded-For": "1.1.1.1, 9.9.9.9"})
+    assert client.post("/api/sql", json=q, headers={"X-Forwarded-For": "1.1.1.1, 9.9.9.9"}).status_code == 429
+    # same trusted hop position, different client -> its own bucket
+    assert client.post("/api/sql", json=q, headers={"X-Forwarded-For": "2.2.2.2, 9.9.9.9"}).status_code == 200
+    ratelimit.reset()

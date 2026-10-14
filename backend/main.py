@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from backend.ratelimit import limit  # noqa: E402
 from src.analytics import (category_spend, customer_rfm, filter_transactions, forecast_merchant_spend,  # noqa: E402
                            forecast_monthly_spend, monthly_spend, run_campaign_model, run_sql, segment_summary,
                            run_operations_forecast, budget_variance, DEFAULT_BUDGETS)
@@ -186,7 +187,7 @@ def _forecast_cached(category, channel, region, horizon):
     return forecast_monthly_spend(monthly_spend(d), horizon=horizon)
 
 
-@app.get("/api/forecast")
+@app.get("/api/forecast", dependencies=[Depends(limit("forecast", 30))])
 def forecast(category: Optional[str] = Category, channel: Optional[str] = Channel,
              region: Optional[str] = Region, horizon: int = Query(3, ge=1, le=12)):
     res = _forecast_cached(category or "All", channel or "All", region or "All", horizon)
@@ -361,7 +362,7 @@ def sql_examples():
             "schema": [{"column": c, "type": str(t)} for c, t in get_df().dtypes.items()]}
 
 
-@app.post("/api/sql")
+@app.post("/api/sql", dependencies=[Depends(limit("sql", 20))])
 def sql(req: SqlRequest):
     get_df()  # make sure the database file exists
     try:
@@ -412,7 +413,7 @@ class ClassifyRequest(BaseModel):
     descriptor: str = Field(..., min_length=1, max_length=200)
 
 
-@app.post("/api/merchants/classify")
+@app.post("/api/merchants/classify", dependencies=[Depends(limit("classify", 60))])
 def classify(req: ClassifyRequest):
     import pandas as pd
     res = classify_descriptors(pd.Series([req.descriptor])).iloc[0]
@@ -431,7 +432,7 @@ def _scope_label(category, channel, region, start, end) -> str:
     return ", ".join(parts) or "All transactions"
 
 
-@app.get("/api/export/excel")
+@app.get("/api/export/excel", dependencies=[Depends(limit("export", 6))])
 def export_excel(category: Optional[str] = Category, channel: Optional[str] = Channel,
                  region: Optional[str] = Region, start: Optional[str] = Start, end: Optional[str] = End):
     d = filtered(category, channel, region, start, end)
@@ -442,7 +443,7 @@ def export_excel(category: Optional[str] = Category, channel: Optional[str] = Ch
                     headers={"Content-Disposition": 'attachment; filename="spendiq-report.xlsx"'})
 
 
-@app.get("/api/export/pptx")
+@app.get("/api/export/pptx", dependencies=[Depends(limit("export", 6))])
 def export_pptx(category: Optional[str] = Category, channel: Optional[str] = Channel,
                 region: Optional[str] = Region, start: Optional[str] = Start, end: Optional[str] = End):
     d = filtered(category, channel, region, start, end)
@@ -548,7 +549,7 @@ class NarrativeContext(BaseModel):
     context: dict = Field(default_factory=dict)
 
 
-@app.post("/api/narrative/{section}")
+@app.post("/api/narrative/{section}", dependencies=[Depends(limit("narrative", 20))])
 def narrative(section: str, req: NarrativeContext = NarrativeContext()):
     """Generate a plain-English narrative summary for a dashboard section.
     
