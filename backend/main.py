@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import threading
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -33,7 +34,27 @@ from src.macro_intelligence import get_all_indicators, get_macro_context, get_re
 from src.narrative import generate_summary  # noqa: E402
 
 
-app = FastAPI(title="SpendIQ API", version="1.0.0",
+def _warm_up() -> None:
+    """Populate the dataset and the default (unfiltered) cached results so first requests are fast."""
+    steps = (("data", get_df), ("campaign", lambda: _campaign()),
+             ("forecast", lambda: _forecast_cached("All", "All", "All", 3)),
+             ("segments", lambda: _segments()))
+    for name, fn in steps:
+        try:
+            fn()
+        except Exception as exc:  # warm-up is best effort; endpoints recompute on demand
+            print(f"[warmup] {name} failed: {exc}", flush=True)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Background thread: the server accepts requests immediately instead of blocking startup.
+    if os.environ.get("SPENDIQ_WARMUP", "1") != "0":
+        threading.Thread(target=_warm_up, name="spendiq-warmup", daemon=True).start()
+    yield
+
+
+app = FastAPI(title="SpendIQ API", version="1.0.0", lifespan=lifespan,
               description="Synthetic banking analytics. Not a production banking system.")
 _EXTRA_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", *_EXTRA_ORIGINS],
