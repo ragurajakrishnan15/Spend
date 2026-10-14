@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.ratelimit import limit  # noqa: E402
+from backend.ratelimit import client_ip, enabled as ratelimit_enabled, limit, _PROXY_HOPS  # noqa: E402
 from src.analytics import (category_spend, customer_rfm, filter_transactions, forecast_merchant_spend,  # noqa: E402
                            forecast_monthly_spend, monthly_spend, run_campaign_model, run_sql, segment_summary,
                            run_operations_forecast, budget_variance, DEFAULT_BUDGETS)
@@ -100,6 +100,19 @@ End = Query(None, description="YYYY-MM-DD", pattern=r"^\d{4}-\d{2}-\d{2}$")
 def health():
     df = get_df()
     return {"status": "ok", "rows": int(len(df)), "data_version": DATA_VERSION, "synthetic": True}
+
+
+# TEMPORARY: remove once the proxy hop count is confirmed. Echoes only the caller's own request metadata.
+@app.get("/api/_debug/client-ip")
+def debug_client_ip(request: Request):
+    return {
+        "x_forwarded_for": request.headers.get("x-forwarded-for"),
+        "x_real_ip": request.headers.get("x-real-ip"),
+        "socket_peer": request.client.host if request.client else None,
+        "derived_client_ip": client_ip(request),
+        "proxy_hops": _PROXY_HOPS,
+        "rate_limit_enabled": ratelimit_enabled(),
+    }
 
 
 @app.get("/api/meta")
